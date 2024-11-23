@@ -28,7 +28,7 @@ const CropRect = ({ shapeProps, isSelected, onSelect, onChange, isLocked }) => {
             ...shapeProps,
             x: e.target.x(),
             y: e.target.y(),
-          });
+          }, e);
         }}
         onTransformEnd={(e) => {
           const node = shapeRef.current;
@@ -90,7 +90,7 @@ const ImageEditor = () => {
   const [scale, setScale] = useState(1);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [imagePos, setImagePos] = useState({ x: 0, y: 0 });
-  const [isLocked, setIsLocked] = useState(false);
+  const [isLocked, setIsLocked] = useState(true);
   const [history, setHistory] = useState([]);
   const [currentStep, setCurrentStep] = useState(-1);
   const stageRef = useRef();
@@ -144,6 +144,14 @@ const ImageEditor = () => {
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         redo();
+      }
+      // Delete selected rectangles when Delete key is pressed
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
+        e.preventDefault();
+        const newRects = cropRects.filter(rect => !selectedIds.includes(rect.id));
+        setCropRects(newRects);
+        setSelectedIds([]);
+        addToHistory(newRects);
       }
       // Duplicate selected with Alt
       if (e.altKey && selectedIds.length > 0) {
@@ -339,10 +347,32 @@ const ImageEditor = () => {
     stage.batchDraw();
   };
 
-  const handleRectChange = (newAttrs) => {
-    const newRects = cropRects.map(rect =>
-      rect.id === newAttrs.id ? newAttrs : rect
-    );
+  const handleRectChange = (newAttrs, dragEvent = null) => {
+    let newRects = [...cropRects];
+    
+    // If this is a drag event and we have multiple selections
+    if (dragEvent && selectedIds.length > 1) {
+      const deltaX = dragEvent.target.x() - cropRects.find(r => r.id === newAttrs.id).x;
+      const deltaY = dragEvent.target.y() - cropRects.find(r => r.id === newAttrs.id).y;
+      
+      // Update all selected rectangles
+      newRects = cropRects.map(rect => {
+        if (selectedIds.includes(rect.id)) {
+          return {
+            ...rect,
+            x: rect.x + deltaX,
+            y: rect.y + deltaY,
+          };
+        }
+        return rect;
+      });
+    } else {
+      // Handle single rectangle changes
+      newRects = cropRects.map(rect =>
+        rect.id === newAttrs.id ? newAttrs : rect
+      );
+    }
+    
     setCropRects(newRects);
     addToHistory(newRects);
   };
@@ -363,14 +393,14 @@ const ImageEditor = () => {
               disabled={currentStep <= 0}
               className="px-4 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              ↩ Undo
+              Undo
             </button>
             <button
               onClick={redo}
               disabled={currentStep >= history.length - 1}
               className="px-4 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              ↪ Redo
+              Redo
             </button>
             <button
               onClick={toggleLock}
@@ -380,7 +410,7 @@ const ImageEditor = () => {
                 : 'bg-gray-600 hover:bg-gray-700 text-white'
               }`}
             >
-              {isLocked ? '🔒 Unlock' : '🔓 Lock Square'}
+              {isLocked ? 'Unlock' : 'Lock Square'}
             </button>
             <button
               onClick={handleCrop}
@@ -407,8 +437,9 @@ const ImageEditor = () => {
           height={stageSize.height}
           ref={stageRef}
           onMouseDown={(e) => {
+            // Deselect when clicking on empty stage area
             const clickedOnEmpty = e.target === e.target.getStage();
-            if (clickedOnEmpty && !e.evt.shiftKey) {
+            if (clickedOnEmpty) {
               setSelectedIds([]);
             }
           }}
