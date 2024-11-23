@@ -12,6 +12,7 @@
   "dependencies": {
     "autoprefixer": "^10.4.20",
     "file-saver": "^2.0.5",
+    "jszip": "^3.10.1",
     "konva": "^9.3.16",
     "postcss": "^8.4.49",
     "react": "^18.3.1",

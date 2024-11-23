@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Stage, Layer, Image, Rect, Transformer } from 'react-konva';
+import JSZip from 'jszip';
 
 const CropRect = ({ shapeProps, isSelected, onSelect, onChange, isLocked }) => {
   const shapeRef = useRef();
@@ -267,10 +268,11 @@ const ImageEditor = () => {
     }
   };
 
-  const handleCrop = () => {
+  const handleCrop = async () => {
     if (!image || cropRects.length === 0) return;
 
-    cropRects.forEach((cropRect, index) => {
+    const zip = new JSZip();
+    const promises = cropRects.map(async (cropRect, index) => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
 
@@ -313,12 +315,25 @@ const ImageEditor = () => {
       // Restore context
       ctx.restore();
 
-      // Create download link
-      const link = document.createElement('a');
-      link.download = `cropped-image-${index + 1}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+      // Convert canvas to blob
+      return new Promise(resolve => {
+        canvas.toBlob(blob => {
+          zip.file(`cropped-image-${index + 1}.png`, blob);
+          resolve();
+        }, 'image/png');
+      });
     });
+
+    // Wait for all images to be processed
+    await Promise.all(promises);
+
+    // Generate and download zip file
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(zipBlob);
+    link.download = 'cropped-images.zip';
+    link.click();
+    URL.revokeObjectURL(link.href);
   };
 
   const handleZoom = (event) => {
